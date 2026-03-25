@@ -2329,6 +2329,8 @@ def discover_recent_gist_raw_urls_for_queries(
         stop_reason = "max_gists_reached"
 
     processed_gists = 0
+    total_selected_candidates = len(selected_candidates)
+    completed_detail_count = 0
     detail_results: list[dict] = []
     detail_worker_count = max(1, min(DEFAULT_DISCOVER_CONTENT_WORKERS, len(selected_candidates) or 1))
     if selected_candidates:
@@ -2343,6 +2345,7 @@ def discover_recent_gist_raw_urls_for_queries(
                 try:
                     payload = future.result()
                 except CollectorError as exc:
+                    completed_detail_count += 1
                     aggregated_errors.append(
                         {
                             "stage": "detail_page",
@@ -2352,9 +2355,18 @@ def discover_recent_gist_raw_urls_for_queries(
                             "error": str(exc),
                         }
                     )
+                    log_line(
+                        f"[DETAIL] completed={completed_detail_count}/{total_selected_candidates} "
+                        f"slot={index} status=failed"
+                    )
                     log_line(f"[WARN] gist详情页抓取失败: {gist_item['detail_url']} error={exc}")
                     continue
+                completed_detail_count += 1
                 detail_results.append(payload)
+                log_line(
+                    f"[DETAIL] completed={completed_detail_count}/{total_selected_candidates} "
+                    f"slot={index} status=ok raw_candidates={len(payload['raw_items'])}"
+                )
 
     detail_results.sort(key=lambda item: item["index"])
 
@@ -2385,6 +2397,7 @@ def discover_recent_gist_raw_urls_for_queries(
             break
 
     total_raw_checked = len(raw_tasks)
+    completed_raw_count = 0
     if raw_tasks:
         raw_worker_count = max(1, min(DEFAULT_DISCOVER_CONTENT_WORKERS, len(raw_tasks) or 1))
         with ThreadPoolExecutor(max_workers=raw_worker_count) as executor:
@@ -2406,6 +2419,7 @@ def discover_recent_gist_raw_urls_for_queries(
                 try:
                     payload = future.result()
                 except CollectorError as exc:
+                    completed_raw_count += 1
                     aggregated_errors.append(
                         {
                             "stage": "raw_file",
@@ -2415,10 +2429,19 @@ def discover_recent_gist_raw_urls_for_queries(
                             "error": str(exc),
                         }
                     )
+                    log_line(
+                        f"[RAW] completed={completed_raw_count}/{total_raw_checked} "
+                        f"slot={task['task_index']} status=failed"
+                    )
                     log_line(f"[WARN] raw文件抓取失败: {raw_item['raw_url']} error={exc}")
                     continue
 
+                completed_raw_count += 1
                 inspect_result = payload["inspect_result"]
+                log_line(
+                    f"[RAW] completed={completed_raw_count}/{total_raw_checked} "
+                    f"slot={task['task_index']} status=ok matched={1 if inspect_result['matched'] else 0}"
+                )
                 if not inspect_result["matched"]:
                     continue
 
