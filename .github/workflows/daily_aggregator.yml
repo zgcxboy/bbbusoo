@@ -2,7 +2,7 @@ name: Aggregator Daily Build
 
 on:
   schedule:
-    # 每5天 UTC 时间 0:00 运行 (北京时间 8:00)
+    # 每天 UTC 01:00 运行（北京时间 09:00）
     - cron: '0 1 * * *'
   workflow_dispatch:
     inputs:
@@ -11,6 +11,10 @@ on:
         required: false
         type: boolean
         default: false
+
+concurrency:
+  group: aggregator-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -24,7 +28,7 @@ jobs:
       skip_crawl: ${{ steps.check_artifact.outputs.skip_crawl }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@main
+      uses: actions/checkout@v6
 
     - name: Check and Restore Existing raw-nodes
       id: check_artifact
@@ -57,27 +61,49 @@ jobs:
 
     - name: Set up Python
       if: steps.check_artifact.outputs.skip_crawl != 'true'
-      uses: actions/setup-python@main
+      uses: actions/setup-python@v6
       with:
-        python-version: 'x'
+        python-version: '3.11'
 
     - name: Install Dependencies
       if: steps.check_artifact.outputs.skip_crawl != 'true'
       run: |
+        python -m pip install --upgrade pip
         pip install requests PyYAML
+
+    - name: Build Extra Source URL List
+      if: steps.check_artifact.outputs.skip_crawl != 'true'
+      run: |
+        python upload_workers_yaml_to_gist.py \
+          --no-upload-gist \
+          --discover-gist-search \
+          --emit-source-urls-file extra_source_urls.txt \
+          --timeout 10 \
+          --search-max-pages 3 \
+          --fetch-retry-count 3 \
+          --fetch-retry-backoff-seconds 60 \
+          --search-query-workers 1 \
+          --search-page-delay-seconds 3 \
+          --search-rate-limit-retries 3 \
+          --search-rate-limit-backoff-seconds 60 \
+          --discover-content-workers 1 \
+          --max-workers 4
+        echo "额外源数量: $(wc -l < extra_source_urls.txt)"
 
     - name: Run Aggregator Script
       if: steps.check_artifact.outputs.skip_crawl != 'true'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        EXTRA_SOURCE_URLS_FILE: extra_source_urls.txt
       run: |
         python aggregator.py
 
     - name: Upload Raw Artifact
-      uses: actions/upload-artifact@main
+      uses: actions/upload-artifact@v4
       with:
         name: raw-nodes
         path: nodes.txt
+        if-no-files-found: error
         retention-days: 1
         overwrite: true
 
@@ -85,38 +111,25 @@ jobs:
   check_active:
     needs: fetch_raw
     runs-on: ubuntu-latest
+    env:
+      GITHUB_GIST_ID: ${{ secrets.GITHUB_GIST_ID }}
+      GITHUB_GIST_TOKEN: ${{ secrets.GITHUB_GIST_TOKEN }}
+      GIST_FILENAME: ${{ vars.GIST_FILENAME }}
     steps:
     - name: Checkout Code
-      uses: actions/checkout@main
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0 
 
     - name: Set up Python
-      uses: actions/setup-python@main
+      uses: actions/setup-python@v6
       with:
-        python-version: 'x'
+        python-version: '3.11'
 
     - name: Download Raw Artifact
-      uses: actions/download-artifact@main
+      uses: actions/download-artifact@v4
       with:
         name: raw-nodes
-
-    # --- [新增] 合并历史节点 ---
-    - name: Fetch Previous Release Nodes & Merge
-      run: |
-        echo "尝试获取 release 分支上一轮的有效节点..."
-        # 直接通过 raw 链接下载上一轮的结果，如果这是第一次运行报 404 也不影响主流程
-        if wget -qO previous_nodes.txt "https://raw.githubusercontent.com/${{ github.repository }}/release/nodes.txt"; then
-          echo "✅ 成功获取上一轮节点！"
-          if [ -f "merge_nodes.py" ]; then
-            python merge_nodes.py
-            echo "✅ 历史节点与新节点合并去重完成。"
-          else
-            echo "⚠️ 未找到 merge_nodes.py 脚本，跳过合并步骤。"
-          fi
-        else
-          echo "ℹ️ 未找到上一轮节点文件 (可能是首次运行或 release 分支暂无数据)，跳过合并。"
-        fi
 
     # --- [已存在] 关键字过滤阶段 ---
     - name: Filter Nodes by Keywords
@@ -135,7 +148,8 @@ jobs:
     # --- 环境安装与测速 ---
     - name: Install Environment & Update GeoIP Database
       run: |
-        pip install maxminddb
+        python -m pip install --upgrade pip
+        pip install maxminddb PyYAML
         
         echo "尝试下载最新的 GeoLite2-Country 数据库..."
         if wget -T 15 -qO temp_GeoLite2.mmdb "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-Country.mmdb"; then
@@ -169,19 +183,17 @@ jobs:
       run: |
         python check_active.py
 
-    - name: Publish to Release Branch
+    - name: Upload Subscription to Gist
+      if: env.GITHUB_GIST_ID != '' && env.GITHUB_GIST_TOKEN != ''
       run: |
-        mkdir -p publish_dir
-        cp sub.txt publish_dir/
-        cp nodes.txt publish_dir/
-        cd publish_dir
-        
-        git init
-        git checkout -b release
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        git add .
-        git commit -m "Auto-update valid nodes [$(date)]" || exit 0
-        
-        git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" release
+        echo "::add-mask::$GITHUB_GIST_TOKEN"
+        python upload_workers_yaml_to_gist.py \
+          --upload-file sub.txt \
+          --gist-id "$GITHUB_GIST_ID" \
+          --gist-token "$GITHUB_GIST_TOKEN" \
+          --gist-filename "${GIST_FILENAME:-sub.txt}"
+
+    - name: Skip Gist Upload When Secrets Missing
+      if: env.GITHUB_GIST_ID == '' || env.GITHUB_GIST_TOKEN == ''
+      run: |
+        echo "未设置 GITHUB_GIST_ID 或 GITHUB_GIST_TOKEN，已跳过 Gist 上传。"
