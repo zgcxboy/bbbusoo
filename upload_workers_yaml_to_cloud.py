@@ -314,8 +314,11 @@ def sanitize_sensitive_text(message: str) -> str:
 
 
 def log_line(message: str) -> None:
+    text = str(message or "")
+    # 搜索页 URL 仅用于核查抓取过程，不包含目标 gist ID/raw 订阅内容，保留原样输出。
+    output = text if text.startswith("[SEARCH] ") else sanitize_sensitive_text(text)
     with PRINT_LOCK:
-        print(sanitize_sensitive_text(message), flush=True)
+        print(output, flush=True)
 
 
 def print_line(message: str) -> None:
