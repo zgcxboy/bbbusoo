@@ -201,6 +201,8 @@ DEFAULT_FETCH_RETRY_COUNT = 3
 DEFAULT_FETCH_RETRY_BACKOFF_SECONDS = 5.0
 DEFAULT_DISCOVER_CONTENT_WORKERS = 4
 RETRYABLE_HTTP_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+NOT_FOUND_RETRY_HTTP_STATUS_CODES = {404}
+NOT_FOUND_RETRY_WAIT_SECONDS = 5.0
 GIST_UPLOAD_RETRY_MARKERS = (
     "http 403",
     "http 408",
@@ -378,6 +380,14 @@ def _is_terminal_http_status(code: int | None) -> bool:
     return code is not None and 400 <= code < 500 and code not in RETRYABLE_HTTP_STATUS_CODES
 
 
+def _should_retry_not_found_once(error_entries: list[dict], already_retried: bool) -> bool:
+    if already_retried or not error_entries:
+        return False
+    if any(_is_retryable_http_status(entry.get("code")) for entry in error_entries):
+        return False
+    return any(entry.get("code") in NOT_FOUND_RETRY_HTTP_STATUS_CODES for entry in error_entries)
+
+
 def _looks_retryable_error_message(message: str) -> bool:
     lowered = str(message or "").casefold()
     return any(marker in lowered for marker in RETRYABLE_ERROR_MARKERS)
@@ -435,8 +445,10 @@ def _download_text_source_with_retries(
     if should_retry_via_proxy(url):
         request_candidates.append(("proxy", build_proxy_fallback_url(url)))
 
-    attempts = max(0, retry_count) + 1
+    base_attempts = max(0, retry_count) + 1
+    attempts = base_attempts + 1
     last_errors: list[dict] = []
+    not_found_retry_used = False
     for attempt in range(1, attempts + 1):
         errors: list[dict] = []
         for mode, request_url in request_candidates:
@@ -504,7 +516,18 @@ def _download_text_source_with_retries(
                 log_line(f"[WARN] direct fetch failed, retry via proxy: {url}")
 
         last_errors = errors
-        if attempt >= attempts or not _should_retry_request_errors(errors):
+        retry_not_found_once = _should_retry_not_found_once(errors, not_found_retry_used)
+        if retry_not_found_once:
+            not_found_retry_used = True
+            summary = "; ".join(_format_request_error_summary(entry) for entry in errors)
+            log_line(
+                f"[WARN] {retry_context}返回404，{NOT_FOUND_RETRY_WAIT_SECONDS:.0f}秒后重试一次: "
+                f"attempt={attempt}/{attempts} url={url} error={summary}"
+            )
+            time.sleep(NOT_FOUND_RETRY_WAIT_SECONDS)
+            continue
+
+        if attempt >= base_attempts or not _should_retry_request_errors(errors):
             break
         wait_seconds = retry_backoff_seconds * attempt
         summary = "; ".join(_format_request_error_summary(entry) for entry in errors)
