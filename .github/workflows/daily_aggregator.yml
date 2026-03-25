@@ -112,8 +112,8 @@ jobs:
     needs: fetch_raw
     runs-on: ubuntu-latest
     env:
-      GITHUB_GIST_ID: ${{ secrets.GITHUB_GIST_ID }}
-      GITHUB_GIST_TOKEN: ${{ secrets.GITHUB_GIST_TOKEN }}
+      GIST_ID: ${{ secrets.GIST_ID }}
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
       GIST_FILENAME: ${{ vars.GIST_FILENAME }}
     steps:
     - name: Checkout Code
@@ -184,16 +184,16 @@ jobs:
         python check_active.py
 
     - name: Upload Subscription to Gist
-      if: env.GITHUB_GIST_ID != '' && env.GITHUB_GIST_TOKEN != ''
+      if: env.GIST_ID != '' && env.GIST_TOKEN != ''
       run: |
-        echo "::add-mask::$GITHUB_GIST_TOKEN"
+        echo "::add-mask::$GIST_TOKEN"
         python upload_workers_yaml_to_gist.py \
           --upload-file sub.txt \
-          --gist-id "$GITHUB_GIST_ID" \
-          --gist-token "$GITHUB_GIST_TOKEN" \
+          --gist-id "$GIST_ID" \
+          --gist-token "$GIST_TOKEN" \
           --gist-filename "${GIST_FILENAME:-sub.txt}"
 
     - name: Skip Gist Upload When Secrets Missing
-      if: env.GITHUB_GIST_ID == '' || env.GITHUB_GIST_TOKEN == ''
+      if: env.GIST_ID == '' || env.GIST_TOKEN == ''
       run: |
-        echo "未设置 GITHUB_GIST_ID 或 GITHUB_GIST_TOKEN，已跳过 Gist 上传。"
+        echo "未设置 GIST_ID 或 GIST_TOKEN，已跳过 Gist 上传。"

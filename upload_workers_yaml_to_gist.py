@@ -68,6 +68,7 @@ except ModuleNotFoundError:
     def resolve_gist_token(value: str | None) -> str:
         candidates = (
             value,
+            os.environ.get("GIST_TOKEN", ""),
             os.environ.get("GITHUB_GIST_TOKEN", ""),
             os.environ.get("GITHUB_TOKEN", ""),
         )
@@ -2646,7 +2647,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-prefix", default=DEFAULT_OUTPUT_PREFIX, help="本地输出文件名前缀")
     parser.add_argument("--upload-gist", dest="upload_gist", action="store_true", help="下载完成后上传到 GitHub Gist")
     parser.add_argument("--no-upload-gist", dest="upload_gist", action="store_false", help="下载完成后不上传到 GitHub Gist")
-    parser.add_argument("--gist-token", default=DEFAULT_GIST_TOKEN, help="GitHub Gist token；默认使用脚本内置值或环境变量 GITHUB_GIST_TOKEN/GITHUB_TOKEN")
+    parser.add_argument("--gist-token", default=DEFAULT_GIST_TOKEN, help="GitHub Gist token；默认使用脚本内置值或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN")
     parser.add_argument("--gist-id", default=DEFAULT_GIST_ID, help="已有 Gist ID；默认更新脚本内置的目标 Gist")
     parser.add_argument("--gist-public", action="store_true", help="创建新 Gist 时设为公开")
     parser.add_argument("--gist-filename", default=DEFAULT_GIST_FILENAME, help=f"上传到 Gist 的 YAML 文件名，默认 {DEFAULT_GIST_FILENAME}")
@@ -2733,7 +2734,7 @@ def main() -> int:
         if args.upload_gist:
             gist_token = resolve_gist_token(args.gist_token)
             if not gist_token:
-                raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
+                raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
         upload_path, upload_content = load_local_upload_text(upload_file)
         gist_filename_input = args.gist_filename or DEFAULT_GIST_FILENAME
         if gist_filename_input == DEFAULT_GIST_FILENAME:
@@ -2866,7 +2867,7 @@ def main() -> int:
     if args.upload_gist:
         gist_token = resolve_gist_token(args.gist_token)
         if not gist_token:
-            raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
+            raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
         gist_mode = "update" if args.gist_id else f"create:{'public' if args.gist_public else 'secret'}"
         print_line(f"[INFO] gist_mode: {gist_mode}")
 
