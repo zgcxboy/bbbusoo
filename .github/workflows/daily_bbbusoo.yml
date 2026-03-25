@@ -183,7 +183,7 @@ jobs:
       run: |
         python check_active.py
 
-    - name: Upload Subscription to Gist
+    - name: Upload Subscription to Cloud
       if: env.GIST_ID != '' && env.GIST_TOKEN != ''
       run: |
         echo "::add-mask::$GIST_TOKEN"
@@ -193,7 +193,7 @@ jobs:
           --gist-token "$GIST_TOKEN" \
           --gist-filename "${GIST_FILENAME:-sub.txt}"
 
-    - name: Skip Gist Upload When Secrets Missing
+    - name: Skip Cloud Upload When Secrets Missing
       if: env.GIST_ID == '' || env.GIST_TOKEN == ''
       run: |
-        echo "未设置 GIST_ID 或 GIST_TOKEN，已跳过 Gist 上传。"
+        echo "未设置 GIST_ID 或 GIST_TOKEN，已跳过 Cloud 上传。"

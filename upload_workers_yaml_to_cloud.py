@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-下载多个 Clash/Clash.Meta YAML 或 URI 订阅源，自动识别并合并成一个统一 YAML，再更新到现有 GitHub Gist。
+下载多个 Clash/Clash.Meta YAML 或 URI 订阅源，自动识别并合并成一个统一 YAML，再更新到 Cloud（底层使用 GitHub Gist）。
 """
 
 from __future__ import annotations
@@ -2579,15 +2579,15 @@ def upload_text_to_gist(
                 raise
             wait_seconds = DEFAULT_GIST_UPLOAD_BACKOFF_SECONDS * attempt
             log_line(
-                f"[WARN] Gist 上传失败，{wait_seconds:.0f}秒后重试: "
+                f"[WARN] Cloud 上传失败，{wait_seconds:.0f}秒后重试: "
                 f"attempt={attempt}/{attempts} error={exc}"
             )
             time.sleep(wait_seconds)
     else:
-        raise CollectorError("Gist 上传失败：重试后仍未成功")
+        raise CollectorError("Cloud 上传失败：重试后仍未成功")
 
     if not isinstance(response, dict):
-        raise CollectorError("GitHub Gist API 返回了异常响应")
+        raise CollectorError("Cloud API 返回了异常响应")
 
     return {
         "action": action,
@@ -2621,7 +2621,7 @@ def upload_yaml_to_gist(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="下载多个 Clash/Clash.Meta YAML 或 URI 订阅源并上传到 Gist，也支持直接上传本地订阅文件。"
+        description="下载多个 Clash/Clash.Meta YAML 或 URI 订阅源并上传到 Cloud（底层使用 GitHub Gist），也支持直接上传本地订阅文件。"
     )
     parser.set_defaults(upload_gist=DEFAULT_UPLOAD_GIST)
     parser.set_defaults(save_local=DEFAULT_SAVE_LOCAL)
@@ -2629,7 +2629,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--upload-file",
         default=DEFAULT_UPLOAD_FILE,
-        help="直接读取本地文本文件并上传到 Gist；启用后跳过下载、搜索和 YAML 合并流程",
+        help="直接读取本地文本文件并上传到 Cloud；启用后跳过下载、搜索和 YAML 合并流程",
     )
     parser.add_argument(
         "--emit-source-urls-file",
@@ -2645,21 +2645,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SEC, help=f"下载和上传超时秒数，默认 {DEFAULT_TIMEOUT_SEC}")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="本地输出目录，默认当前目录")
     parser.add_argument("--output-prefix", default=DEFAULT_OUTPUT_PREFIX, help="本地输出文件名前缀")
-    parser.add_argument("--upload-gist", dest="upload_gist", action="store_true", help="下载完成后上传到 GitHub Gist")
-    parser.add_argument("--no-upload-gist", dest="upload_gist", action="store_false", help="下载完成后不上传到 GitHub Gist")
-    parser.add_argument("--gist-token", default=DEFAULT_GIST_TOKEN, help="GitHub Gist token；默认使用脚本内置值或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN")
-    parser.add_argument("--gist-id", default=DEFAULT_GIST_ID, help="已有 Gist ID；默认更新脚本内置的目标 Gist")
-    parser.add_argument("--gist-public", action="store_true", help="创建新 Gist 时设为公开")
-    parser.add_argument("--gist-filename", default=DEFAULT_GIST_FILENAME, help=f"上传到 Gist 的 YAML 文件名，默认 {DEFAULT_GIST_FILENAME}")
-    parser.add_argument("--gist-description", default="", help="Gist 描述，默认自动生成")
-    parser.add_argument("--discover-gist-search", action="store_true", help="从 Gist 搜索结果分页发现最近更新的节点 raw 地址")
+    parser.add_argument("--upload-gist", dest="upload_gist", action="store_true", help="下载完成后上传到 Cloud")
+    parser.add_argument("--no-upload-gist", dest="upload_gist", action="store_false", help="下载完成后不上传到 Cloud")
+    parser.add_argument("--gist-token", default=DEFAULT_GIST_TOKEN, help="Cloud token；默认使用脚本内置值或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN")
+    parser.add_argument("--gist-id", default=DEFAULT_GIST_ID, help="已有 Cloud 目标 ID；默认更新脚本内置的目标 Gist")
+    parser.add_argument("--gist-public", action="store_true", help="创建新 Cloud 目标时设为公开")
+    parser.add_argument("--gist-filename", default=DEFAULT_GIST_FILENAME, help=f"上传到 Cloud 的文件名，默认 {DEFAULT_GIST_FILENAME}")
+    parser.add_argument("--gist-description", default="", help="Cloud 描述，默认自动生成")
+    parser.add_argument("--discover-gist-search", action="store_true", help="从 Cloud 搜索结果分页发现最近更新的节点 raw 地址")
     parser.add_argument("--discover-only", action="store_true", help="仅输出发现到的 raw 地址 txt/json，不继续合并 YAML")
-    parser.add_argument("--search-query", default=DEFAULT_SEARCH_QUERY, help=f"Gist 搜索关键词，默认 {DEFAULT_SEARCH_QUERY}")
-    parser.add_argument("--search-language", default=DEFAULT_SEARCH_LANGUAGE, help=f"Gist 搜索语言过滤，默认 {DEFAULT_SEARCH_LANGUAGE}")
-    parser.add_argument("--search-sort", default=DEFAULT_SEARCH_SORT, help=f"Gist 搜索排序字段，默认 {DEFAULT_SEARCH_SORT}")
-    parser.add_argument("--search-order", default=DEFAULT_SEARCH_ORDER, choices=["asc", "desc"], help=f"Gist 搜索排序方向，默认 {DEFAULT_SEARCH_ORDER}")
-    parser.add_argument("--search-start-page", type=int, default=DEFAULT_SEARCH_START_PAGE, help=f"Gist 搜索起始页，默认 {DEFAULT_SEARCH_START_PAGE}")
-    parser.add_argument("--search-max-pages", type=int, default=DEFAULT_SEARCH_MAX_PAGES, help=f"Gist 搜索最大翻页数，默认 {DEFAULT_SEARCH_MAX_PAGES}")
+    parser.add_argument("--search-query", default=DEFAULT_SEARCH_QUERY, help=f"Cloud 搜索关键词，默认 {DEFAULT_SEARCH_QUERY}")
+    parser.add_argument("--search-language", default=DEFAULT_SEARCH_LANGUAGE, help=f"Cloud 搜索语言过滤，默认 {DEFAULT_SEARCH_LANGUAGE}")
+    parser.add_argument("--search-sort", default=DEFAULT_SEARCH_SORT, help=f"Cloud 搜索排序字段，默认 {DEFAULT_SEARCH_SORT}")
+    parser.add_argument("--search-order", default=DEFAULT_SEARCH_ORDER, choices=["asc", "desc"], help=f"Cloud 搜索排序方向，默认 {DEFAULT_SEARCH_ORDER}")
+    parser.add_argument("--search-start-page", type=int, default=DEFAULT_SEARCH_START_PAGE, help=f"Cloud 搜索起始页，默认 {DEFAULT_SEARCH_START_PAGE}")
+    parser.add_argument("--search-max-pages", type=int, default=DEFAULT_SEARCH_MAX_PAGES, help=f"Cloud 搜索最大翻页数，默认 {DEFAULT_SEARCH_MAX_PAGES}")
     parser.add_argument("--search-within-hours", type=float, default=DEFAULT_SEARCH_WITHIN_HOURS, help=f"仅保留最近多少小时内更新，默认 {DEFAULT_SEARCH_WITHIN_HOURS}")
     parser.add_argument("--search-max-gists", type=int, default=DEFAULT_SEARCH_MAX_GISTS, help="最多检查多少个 gist，0 表示不限制")
     parser.add_argument("--search-max-raw-files", type=int, default=DEFAULT_SEARCH_MAX_RAW_FILES, help="最多检查多少个 raw 文件，0 表示不限制")
@@ -2679,35 +2679,35 @@ def build_parser() -> argparse.ArgumentParser:
         "--search-query-workers",
         type=int,
         default=DEFAULT_SEARCH_QUERY_WORKERS,
-        help=f"Gist 搜索关键词并发数，默认 {DEFAULT_SEARCH_QUERY_WORKERS}",
+        help=f"Cloud 搜索关键词并发数，默认 {DEFAULT_SEARCH_QUERY_WORKERS}",
     )
     parser.add_argument(
         "--search-page-delay-seconds",
         type=float,
         default=DEFAULT_SEARCH_PAGE_DELAY_SECONDS,
-        help=f"Gist 搜索翻页间隔秒数，默认 {DEFAULT_SEARCH_PAGE_DELAY_SECONDS}",
+        help=f"Cloud 搜索翻页间隔秒数，默认 {DEFAULT_SEARCH_PAGE_DELAY_SECONDS}",
     )
     parser.add_argument(
         "--search-rate-limit-retries",
         type=int,
         default=DEFAULT_SEARCH_RATE_LIMIT_RETRIES,
-        help=f"Gist 搜索遇到限流时的最大重试次数，默认 {DEFAULT_SEARCH_RATE_LIMIT_RETRIES}",
+        help=f"Cloud 搜索遇到限流时的最大重试次数，默认 {DEFAULT_SEARCH_RATE_LIMIT_RETRIES}",
     )
     parser.add_argument(
         "--search-rate-limit-backoff-seconds",
         type=float,
         default=DEFAULT_SEARCH_RATE_LIMIT_BACKOFF_SECONDS,
-        help=f"Gist 搜索遇到限流时的退避基准秒数，默认 {DEFAULT_SEARCH_RATE_LIMIT_BACKOFF_SECONDS}",
+        help=f"Cloud 搜索遇到限流时的退避基准秒数，默认 {DEFAULT_SEARCH_RATE_LIMIT_BACKOFF_SECONDS}",
     )
     parser.add_argument(
         "--discover-content-workers",
         type=int,
         default=DEFAULT_DISCOVER_CONTENT_WORKERS,
-        help=f"Gist 详情页和 raw 内容检查并发数，默认 {DEFAULT_DISCOVER_CONTENT_WORKERS}",
+        help=f"Cloud 详情页和 raw 内容检查并发数，默认 {DEFAULT_DISCOVER_CONTENT_WORKERS}",
     )
     parser.add_argument("--save-local", dest="save_local", action="store_true", help="保存本地 txt/json/yaml 文件")
     parser.add_argument("--no-save-local", dest="save_local", action="store_false", help="不保存本地 txt/json/yaml 文件")
-    parser.add_argument("--no-discover-gist-search", dest="discover_gist_search", action="store_false", help="关闭 Gist 搜索，只使用内置和手动来源")
+    parser.add_argument("--no-discover-gist-search", dest="discover_gist_search", action="store_false", help="关闭 Cloud 搜索，只使用内置和手动来源")
     parser.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS, help=f"并发线程数，默认 {DEFAULT_MAX_WORKERS}")
     return parser
 
@@ -2734,7 +2734,7 @@ def main() -> int:
         if args.upload_gist:
             gist_token = resolve_gist_token(args.gist_token)
             if not gist_token:
-                raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
+                raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 Cloud token")
         upload_path, upload_content = load_local_upload_text(upload_file)
         gist_filename_input = args.gist_filename or DEFAULT_GIST_FILENAME
         if gist_filename_input == DEFAULT_GIST_FILENAME:
@@ -2757,9 +2757,9 @@ def main() -> int:
                 file_content=upload_content,
                 timeout=args.timeout,
             )
-            print_line("[DONE] 上传成功到 gist")
+            print_line("[DONE] 上传成功到 cloud")
         else:
-            print_line("[DONE] 已读取本地文件，未启用 Gist 上传。")
+            print_line("[DONE] 已读取本地文件，未启用 Cloud 上传。")
         return 0
 
     source_urls = normalize_source_urls(args.source_url or list(DEFAULT_SOURCE_URLS))
@@ -2867,7 +2867,7 @@ def main() -> int:
     if args.upload_gist:
         gist_token = resolve_gist_token(args.gist_token)
         if not gist_token:
-            raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 token")
+            raise CollectorError("启用 --upload-gist 时，必须通过 --gist-token 或环境变量 GIST_TOKEN/GITHUB_GIST_TOKEN/GITHUB_TOKEN 提供 Cloud token")
         gist_mode = "update" if args.gist_id else f"create:{'public' if args.gist_public else 'secret'}"
         print_line(f"[INFO] gist_mode: {gist_mode}")
 
@@ -2946,7 +2946,7 @@ def main() -> int:
             yaml_text=merged_yaml,
             timeout=args.timeout,
         )
-        print_line("[DONE] 上传成功到 gist")
+        print_line("[DONE] 上传成功到 cloud")
 
     return 0
 
