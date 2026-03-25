@@ -53,7 +53,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class NodeAggregator:
+class BBBusooCollector:
     def __init__(self, token: Optional[str]):
         self.github_token = token
         self.nodes: Set[str] = set()
@@ -509,5 +509,5 @@ class NodeAggregator:
 
 if __name__ == "__main__":
     token = os.environ.get("GH_TOKEN")
-    aggregator = NodeAggregator(token)
-    aggregator.run()
+    collector = BBBusooCollector(token)
+    collector.run()

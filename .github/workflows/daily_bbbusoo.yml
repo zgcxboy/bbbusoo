@@ -1,4 +1,4 @@
-name: Aggregator Daily Build
+name: BBBusoo Daily Build
 
 on:
   schedule:
@@ -13,7 +13,7 @@ on:
         default: false
 
 concurrency:
-  group: aggregator-${{ github.workflow }}-${{ github.ref }}
+  group: bbbusoo-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -74,7 +74,7 @@ jobs:
     - name: Build Extra Source URL List
       if: steps.check_artifact.outputs.skip_crawl != 'true'
       run: |
-        python upload_workers_yaml_to_gist.py \
+        python upload_workers_yaml_to_cloud.py \
           --no-upload-gist \
           --discover-gist-search \
           --emit-source-urls-file extra_source_urls.txt \
@@ -90,13 +90,13 @@ jobs:
           --max-workers 4
         echo "额外源数量: $(wc -l < extra_source_urls.txt)"
 
-    - name: Run Aggregator Script
+    - name: Run BBBusoo Script
       if: steps.check_artifact.outputs.skip_crawl != 'true'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         EXTRA_SOURCE_URLS_FILE: extra_source_urls.txt
       run: |
-        python aggregator.py
+        python bbbusoo.py
 
     - name: Upload Raw Artifact
       uses: actions/upload-artifact@v4
@@ -187,7 +187,7 @@ jobs:
       if: env.GIST_ID != '' && env.GIST_TOKEN != ''
       run: |
         echo "::add-mask::$GIST_TOKEN"
-        python upload_workers_yaml_to_gist.py \
+        python upload_workers_yaml_to_cloud.py \
           --upload-file sub.txt \
           --gist-id "$GIST_ID" \
           --gist-token "$GIST_TOKEN" \

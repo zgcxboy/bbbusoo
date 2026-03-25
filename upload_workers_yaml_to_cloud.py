@@ -27,7 +27,7 @@ from urllib.request import Request, urlopen
 import yaml
 
 try:
-    from aggregator_issue91_collector import (
+    from bbbusoo_issue91_collector import (
         CollectorError,
         DEFAULT_GIST_ID,
         DEFAULT_GIST_TOKEN,
